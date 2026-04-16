@@ -1,0 +1,40 @@
+services:
+  # O Maestro (Laravel)
+  laravel:
+    build:
+      context: ./laravel-app
+    container_name: laravel_app
+    ports:
+      - "8000:80"
+    volumes:
+      - ./laravel-app:/var/www/html
+    networks:
+      - nota_network
+    depends_on:
+      - db
+
+  # O Especialista (Python)
+  python-ai:
+    build:
+      context: ./python-ai
+    container_name: python_ai
+    ports:
+      - "8001:8000" # Acessível em localhost:8001
+    volumes:
+      - ./python-ai:/app
+    networks:
+      - nota_network
+
+  # Banco de Dados
+  db:
+    image: mysql:8.0
+    container_name: mysql_db
+    environment:
+      MYSQL_DATABASE: notas_fiscais
+      MYSQL_ROOT_PASSWORD: root
+    networks:
+      - nota_network
+
+networks:
+  nota_network:
+    driver: bridge
