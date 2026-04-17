@@ -22,6 +22,17 @@
             <p class="text-gray-400 mt-2">Extração inteligente de Notas Fiscais</p>
         </div>
 
+        @if(session('erro'))
+            <div class="bg-red-600/20 border border-red-500 text-red-500 p-3 rounded-lg mb-4 text-sm">
+                {{ session('erro') }}
+            </div>
+        @endif
+
+        @if(session('sucesso'))
+            <div class="bg-green-600/20 border border-green-500 text-green-500 p-3 rounded-lg mb-4 text-sm">
+                {{ session('sucesso') }}
+            </div>
+        @endif
         <form action="/enviar" method="POST" enctype="multipart/form-data" class="space-y-6">
             @csrf
             <div class="relative">
@@ -43,6 +54,9 @@
                 Analisar Nota Fiscal
             </button>
         </form>
+        <a href="/notas" class="block w-full text-center mt-4 text-gray-400 hover:text-white text-sm transition-colors">
+            Ver Histórico de Notas →
+        </a>
 
         <div class="mt-8 pt-6 border-t border-gray-800 text-center">
             <span class="text-xs text-gray-500 uppercase tracking-widest font-semibold">Realizado por Riah Sander</span>

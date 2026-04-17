@@ -1,4 +1,3 @@
-<th class="p-4 text-center">Ações</th>
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -41,23 +40,26 @@
                         <tr class="hover:bg-gray-800/50 transition">
                             <td class="p-4 font-semibold">{{ $nota->empresa_emissora }}</td>
                             <td class="p-4 text-gray-400">{{ $nota->cnpj ?? 'N/A' }}</td>
-                            <td class="p-4 text-gray-400">{{ $nota->data_emissao ?? 'N/A' }}</td>
+                            <td class="p-4 text-gray-400">
+                                {{ \Carbon\Carbon::parse($nota->data_emissao)->format('d/m/Y') }}
+                            </td>
                             <td class="p-4">
                                 <span class="bg-blue-900/50 text-blue-300 px-3 py-1 rounded-full text-xs border border-blue-800">
                                     {{ ucfirst($nota->categoria) }}
                                 </span>
-
                             </td>
                             <td class="p-4 font-bold text-green-400">R$ {{ number_format($nota->valor_total, 2, ',', '.') }}</td>
+
                             <td class="p-4 text-center">
-    <button onclick="abrirModal('{{ json_encode($nota->itens) }}', '{{ $nota->empresa_emissora }}')"
-            class="text-blue-500 hover:text-blue-400 transition-colors">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-        </svg>
-    </button>
-</td>
+                                <button onclick="abrirModal({{ $nota->id }}, '{{ $nota->empresa_emissora }}')"
+                                        class="text-blue-500 hover:text-blue-400 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                </button>
+                            </td>
+
                             <td class="p-4 text-center">
                                 <form action="{{ route('notas.destroy', $nota->id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja apagar este registro?')">
                                     @csrf
@@ -72,7 +74,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="p-8 text-center text-gray-500">
+                            <td colspan="7" class="p-8 text-center text-gray-500">
                                 Nenhuma nota fiscal processada ainda. Faça o upload da primeira!
                             </td>
                         </tr>
@@ -81,61 +83,84 @@
             </table>
         </div>
     </div>
-<div id="modalItens" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-    <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-lg shadow-2xl">
-        <div class="flex justify-between items-center mb-6">
-            <h2 class="text-xl font-bold text-white">Itens: <span id="modalTitulo" class="text-blue-500"></span></h2>
-            <button onclick="fecharModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
-        </div>
 
-        <div class="max-h-96 overflow-y-auto">
-            <table class="w-full text-left">
-                <thead class="text-gray-500 text-xs uppercase border-b border-gray-800">
-                    <tr>
-                        <th class="pb-2">Produto</th>
-                        <th class="pb-2 text-right">Preço</th>
-                    </tr>
-                </thead>
-                <tbody id="listaItens" class="text-gray-300 divide-y divide-gray-800">
-                    </tbody>
-            </table>
+    <div id="modalItens" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+        <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-lg shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-white">Itens: <span id="modalTitulo" class="text-blue-500"></span></h2>
+                <button onclick="fecharModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+
+            <div class="max-h-96 overflow-y-auto">
+                <table class="w-full text-left">
+                    <thead class="text-gray-500 text-xs uppercase border-b border-gray-800">
+                        <tr>
+                            <th class="pb-2">Produto</th>
+                            <th class="pb-2 text-right">Preço</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listaItens" class="text-gray-300 divide-y divide-gray-800">
+                        </tbody>
+                </table>
+            </div>
         </div>
     </div>
-</div>
 
-<script>
-    function abrirModal(itensJson, empresa) {
-        const itens = JSON.parse(itensJson);
-        const lista = document.getElementById('listaItens');
-        const titulo = document.getElementById('modalTitulo');
+    <script>
+        async function abrirModal(id, empresa) {
+            const modal = document.getElementById('modalItens');
+            const lista = document.getElementById('listaItens');
+            const titulo = document.getElementById('modalTitulo');
 
-        titulo.innerText = empresa;
-        lista.innerHTML = '';
+            titulo.innerText = empresa;
+            lista.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-blue-400 animate-pulse">Buscando itens...</td></tr>';
+            modal.classList.remove('hidden');
 
-        if (itens && itens.length > 0) {
-            itens.forEach(item => {
-                lista.innerHTML += `
-                    <tr>
-                        <td class="py-3 font-medium">${item.nome}</td>
-                        <td class="py-3 text-right text-green-400 font-bold">R$ ${parseFloat(item.preco).toFixed(2).replace('.', ',')}</td>
-                    </tr>`;
-            });
-        } else {
-            lista.innerHTML = '<tr><td colspan="2" class="py-4 text-center text-gray-500">Nenhum item detalhado encontrado.</td></tr>';
+            try {
+                // Busca os dados reais no servidor usando o ID
+                const response = await fetch("{{ url('notas') }}/" + id);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("Erro do Servidor:", errorText);
+                    throw new Error("Falha ao carregar dados (Erro 500)");
+                }
+
+                const nota = await response.json();
+                lista.innerHTML = '';
+
+                // Verifica se há itens no JSON
+                const itens = Array.isArray(nota.itens) ? nota.itens : [];
+
+                if (itens.length > 0) {
+                    itens.forEach(item => {
+                        lista.innerHTML += `
+                            <tr>
+                                <td class="py-3 text-sm">${item.nome || 'Desconhecido'}</td>
+                                <td class="py-3 text-right font-mono text-emerald-400">R$ ${item.preco || '0.00'}</td>
+                            </tr>`;
+                    });
+                } else {
+                    lista.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-500">Nenhum item detalhado nesta nota.</td></tr>';
+                }
+
+            } catch (error) {
+                console.error("Erro detalhado:", error);
+                lista.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-red-500">Erro: ${error.message}</td></tr>`;
+            }
         }
 
-        document.getElementById('modalItens').classList.remove('hidden');
-    }
+        function fecharModal() {
+            document.getElementById('modalItens').classList.add('hidden');
+        }
 
-    function fecharModal() {
-        document.getElementById('modalItens').classList.add('hidden');
-    }
-
-    // Fechar ao clicar fora do modal
-    window.onclick = function(event) {
-        const modal = document.getElementById('modalItens');
-        if (event.target == modal) fecharModal();
-    }
-</script>
+        // Fecha o modal se clicar fora dele
+        window.onclick = function(event) {
+            const modal = document.getElementById('modalItens');
+            if (event.target == modal) {
+                fecharModal();
+            }
+        }
+    </script>
 </body>
 </html>
