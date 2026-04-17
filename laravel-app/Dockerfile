@@ -1,6 +1,6 @@
 FROM php:8.3-apache
 
-# 1. Instala dependências do sistema e extensões PHP necessárias
+# 1. Instala dependências do sistema e extensões PHP
 RUN apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg-dev \
@@ -13,10 +13,10 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo pdo_mysql gd zip
 
 # 2. RESOLVE O ERRO MPM (More than one MPM loaded)
-# Removemos o módulo 'event' e forçamos o 'prefork' manualmente
-RUN rm -f /etc/apache2/mods-enabled/mpm_event.load /etc/apache2/mods-enabled/mpm_event.conf && \
-    a2dismod mpm_event || true && \
-    a2enmod mpm_prefork
+# Removemos o 'event' e forçamos o 'prefork' para o PHP funcionar
+RUN a2dismod mpm_event || true && \
+    a2enmod mpm_prefork && \
+    rm -f /etc/apache2/mods-enabled/mpm_event.load /etc/apache2/mods-enabled/mpm_event.conf
 
 # 3. Configurações do Apache para o Laravel
 RUN a2enmod rewrite
@@ -31,5 +31,14 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 COPY . .
 
-# 6. Instala as dependências do PHP (Composer)
-RUN composer install --no
+# 6. CORREÇÃO AQUI: Instala as dependências do PHP corretamente
+RUN composer install --no-dev --optimize-autoloader
+
+# 7. Ajusta permissões para o Laravel
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && \
+    chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+
+EXPOSE 80
+
+# 8. Comando final para iniciar o Apache
+CMD ["apache2-foreground"]
