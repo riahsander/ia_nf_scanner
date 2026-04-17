@@ -1,6 +1,6 @@
 FROM php:8.3-apache
 
-# Instala dependências do sistema
+# 1. Instala dependências do sistema e extensões do PHP
 RUN apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg-dev \
@@ -12,27 +12,25 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     && docker-php-ext-install pdo pdo_mysql gd zip
 
-# INSTALA O COMPOSER (O que estava faltando!)
+# 2. Configura o Apache para o Laravel (Mod Rewrite e DocumentRoot)
+RUN a2enmod rewrite
+ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+
+# 3. Instala o Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Copia os arquivos do projeto
+# 4. Copia os arquivos e instala dependências
 COPY . .
-
-# INSTALA AS DEPENDÊNCIAS DO PHP
 RUN composer install --no-dev --optimize-autoloader
 
-# Dá permissão para o Laravel escrever nos logs e cache
+# 5. Ajusta permissões para o Laravel
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 80
 
-# O comando para rodar o servidor (ajustado para o Railway)
-CMD php artisan serve --host=0.0.0.0 --port=80
-
-# Habilita o mod_rewrite do Apache para o Laravel
-RUN a2enmod rewrite
-# Muda a raiz do site para a pasta public do Laravel
-ENV APACHE_DOCUMENT_ROOT /var/www/html/public
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+# 6. O CMD deve ser o início do Apache (sempre por último)
+CMD ["apache2-foreground"]
