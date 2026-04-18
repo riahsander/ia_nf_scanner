@@ -62,6 +62,7 @@ return [
             'options' => [
             PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA', storage_path('certs/ca.pem')),
             PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
+            ]
         ],
 
         'mariadb' => [
