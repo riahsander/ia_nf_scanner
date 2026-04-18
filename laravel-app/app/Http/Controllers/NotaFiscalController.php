@@ -28,9 +28,9 @@ class NotaFiscalController extends Controller
             $urlIA = env('PYTHON_AI_URL', 'http://python-ai:8000') . '/extract';
 
             // Envia para o container Python
-            $response = Http::attach(
-                'file', file_get_contents($file), $file->getClientOriginalName()
-            )->post($urlIA);
+            $response = Http::timeout(120)
+            ->attach('image', file_get_contents($file), 'nota.jpg')
+            ->post(env('PYTHON_API_URL', 'https://api-scanner-python.onrender.com'));
 
             if ($response->failed()) {
                 return back()->with('erro', 'A IA falhou. Verifique se o container python-ai está rodando.');
