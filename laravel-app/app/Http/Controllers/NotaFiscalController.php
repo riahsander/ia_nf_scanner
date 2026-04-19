@@ -30,7 +30,7 @@ class NotaFiscalController extends Controller
             // Envia para o container Python
             $response = Http::timeout(120)->attach(
                 'file',
-                file_get_contents($request->file('documento')->getRealPath()),
+                file_get_contents($request->file('nota_fiscal')->getRealPath()),
                 'nota.jpg'
             )->post('https://api-scanner-python.onrender.com/extract');
 
