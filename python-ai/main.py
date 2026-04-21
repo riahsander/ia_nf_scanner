@@ -23,15 +23,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# CORREÇÃO: Validação da chave na inicialização — falha rápido e claro
+# Validação da chave na inicialização — falha rápido e claro
 API_KEY = os.getenv("GROQ_API_KEY")
 if not API_KEY:
     raise ValueError("ERRO FATAL: A variável GROQ_API_KEY não foi configurada!")
 
-# MELHORIA: Model configurável via .env — sem necessidade de redeploy para trocar
+# Model configurável via .env — sem necessidade de redeploy para trocar
 MODEL_NAME = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-# CORREÇÃO: Timeout na chamada ao Groq — evita container travado indefinidamente
+# Timeout na chamada ao Groq — evita container travado indefinidamente
 client = Groq(api_key=API_KEY, timeout=60.0)
 
 # Constantes de validação
@@ -48,7 +48,7 @@ app = FastAPI(title="Riah.AI — OCR Service", version="1.0.0")
 async def root():
     return {"status": "online", "model": MODEL_NAME}
 
-# MELHORIA: Endpoint dedicado de health check para o Render monitorar o serviço
+# Endpoint dedicado de health check para o Render monitorar o serviço
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -57,7 +57,6 @@ async def health():
 async def extract_data(file: UploadFile = File(...)):
 
     # --- VALIDAÇÃO DO TIPO DE ARQUIVO ---
-    # CORREÇÃO: content_type vem do cliente e pode ser falsificado — validar sempre
     if file.content_type not in TIPOS_PERMITIDOS:
         raise HTTPException(
             status_code=415,
@@ -67,7 +66,6 @@ async def extract_data(file: UploadFile = File(...)):
     file_bytes = await file.read()
 
     # --- VALIDAÇÃO DO TAMANHO ---
-    # CORREÇÃO: sem limite, um arquivo de 1GB trava o container
     if len(file_bytes) > MAX_SIZE_BYTES:
         raise HTTPException(
             status_code=413,
@@ -77,28 +75,59 @@ async def extract_data(file: UploadFile = File(...)):
     try:
         # --- 1. PROCESSAMENTO DA IMAGEM / PDF ---
         if file.content_type == "application/pdf":
-            # CORREÇÃO: processa TODAS as páginas do PDF, não apenas a primeira.
-            # Notas fiscais multi-página tinham itens silenciosamente ignorados.
             logger.info(f"Processando PDF: {file.filename}")
-            images = convert_from_bytes(file_bytes, dpi=300)
-            textos = [pytesseract.image_to_string(img, lang='por') for img in images]
-            texto_extraido = "\n".join(textos)
+            try:
+                images = convert_from_bytes(file_bytes, dpi=300)
+                textos = [pytesseract.image_to_string(img, lang='por') for img in images]
+                texto_extraido = "\n".join(textos)
+            except Exception as e:
+                logger.error(f"Erro ao processar PDF: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=422,
+                    detail="Não foi possível processar o PDF. Verifique se o arquivo não está corrompido."
+                )
         else:
             logger.info(f"Processando imagem: {file.filename}")
-            image_to_ocr = Image.open(io.BytesIO(file_bytes))
-            texto_extraido = pytesseract.image_to_string(image_to_ocr, lang='por')
 
-        # Log apenas dos primeiros 300 chars para não poluir o log com dados sensíveis
+            # CORREÇÃO: Tenta abrir como imagem — se falhar, tenta como PDF (fallback)
+            # Resolve o PIL.UnidentifiedImageError quando o content_type está incorreto
+            image_to_ocr = None
+
+            try:
+                # Tentativa 1: abre normalmente como imagem
+                img_buffer   = io.BytesIO(file_bytes)
+                image_to_ocr = Image.open(img_buffer)
+                image_to_ocr.load()  # força carregamento completo para validar
+            except Exception as img_err:
+                logger.warning(f"Falha ao abrir como imagem ({img_err}), tentando como PDF...")
+
+                # Tentativa 2: talvez seja um PDF com content_type errado
+                try:
+                    images         = convert_from_bytes(file_bytes, dpi=300)
+                    textos         = [pytesseract.image_to_string(img, lang='por') for img in images]
+                    texto_extraido = "\n".join(textos)
+                    image_to_ocr   = None  # sinaliza que já extraiu o texto via PDF
+                except Exception as pdf_err:
+                    logger.error(f"Falha no fallback PDF: {pdf_err}", exc_info=True)
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Arquivo inválido ou corrompido. Use uma imagem JPG/PNG nítida ou um PDF válido."
+                    )
+
+            # Se abriu como imagem com sucesso, extrai o texto agora
+            if image_to_ocr is not None:
+                texto_extraido = pytesseract.image_to_string(image_to_ocr, lang='por')
+
+        # Log dos primeiros 300 chars — não polui log com dados sensíveis
         logger.info(f"Texto OCR extraído ({len(texto_extraido)} chars): {texto_extraido[:300]}...")
 
         if not texto_extraido.strip():
             raise HTTPException(
                 status_code=422,
-                detail="Não foi possível extrair texto da imagem. Verifique a qualidade do arquivo."
+                detail="Não foi possível extrair texto da imagem. Verifique a qualidade e nitidez do arquivo."
             )
 
         # --- 2. PROMPT PARA ORGANIZAÇÃO ---
-        # CORREÇÃO: instruções explícitas de fallback — a IA nunca omite campos nem inventa dados
         prompt = (
             "Você é um especialista em leitura de notas fiscais brasileiras. "
             "Abaixo está o texto bruto extraído via OCR de uma nota fiscal. "
@@ -133,14 +162,12 @@ async def extract_data(file: UploadFile = File(...)):
         logger.info(f"Resposta bruta do Groq: {raw_response[:300]}...")
 
         # --- 4. PARSE DO JSON ---
-        # CORREÇÃO: limpa possíveis blocos markdown antes de parsear
-        # e trata JSONDecodeError separadamente para log mais claro
         try:
-            raw_clean   = raw_response.strip()
-            raw_clean   = raw_clean.removeprefix("```json").removeprefix("```")
-            raw_clean   = raw_clean.removesuffix("```").strip()
+            raw_clean    = raw_response.strip()
+            raw_clean    = raw_clean.removeprefix("```json").removeprefix("```")
+            raw_clean    = raw_clean.removesuffix("```").strip()
             dados_objeto = json.loads(raw_clean)
-        except json.JSONDecodeError as json_err:
+        except json.JSONDecodeError:
             logger.error(f"JSON inválido recebido do Groq: {raw_response}", exc_info=True)
             raise HTTPException(
                 status_code=502,
@@ -151,12 +178,9 @@ async def extract_data(file: UploadFile = File(...)):
         return {"status": "sucesso", "dados": dados_objeto}
 
     except HTTPException:
-        # Re-lança HTTPExceptions sem modificar (já têm status e mensagem corretos)
         raise
 
     except Exception as e:
-        # CORREÇÃO: loga o erro real internamente com stack trace completo,
-        # mas retorna mensagem genérica ao cliente — sem vazar detalhes internos
         logger.error(f"Erro inesperado no processamento: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
