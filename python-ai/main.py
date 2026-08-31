@@ -23,7 +23,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Validação da chave na inicialização — falha rápido e claro
+# Validação da chave na inicialização 
 API_KEY = os.getenv("GROQ_API_KEY")
 if not API_KEY:
     raise ValueError("ERRO FATAL: A variável GROQ_API_KEY não foi configurada!")
@@ -36,7 +36,7 @@ client = Groq(api_key=API_KEY, timeout=60.0)
 
 # Constantes de validação
 TIPOS_PERMITIDOS = {"image/jpeg", "image/png", "application/pdf"}
-MAX_SIZE_BYTES   = 10 * 1024 * 1024  # 10MB
+MAX_SIZE_BYTES   = 10 * 1024 * 1024  
 
 app = FastAPI(title="Riah.AI — OCR Service", version="1.0.0")
 
